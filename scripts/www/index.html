@@ -1,11 +1,1188 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus</title>
-    </head>
-    <body>
-        PakePlus
-    </body>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#FFDE00">
+    <meta name="filename" content="beast_transfer_v3.html">
+    <title>BeastTransfer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'head': ['"Archivo Black"', 'sans-serif'],
+                        'body': ['"Space Grotesk"', 'sans-serif'],
+                    },
+                    colors: {
+                        'pop-yellow': '#FFDE00',
+                        'pop-blue': '#3B82F6',
+                        'pop-pink': '#FF69B4',
+                        'pop-purple': '#8B5CF6',
+                        'pop-white': '#FFFFFF',
+                        'pop-black': '#121212',
+                        'pop-green': '#10B981',
+                    },
+                    boxShadow: {
+                        'hard': '4px 4px 0px 0px #121212',
+                        'hard-deep': '8px 8px 0px 0px #121212',
+                        'hard-sm': '2px 2px 0px 0px #121212',
+                        'inner-hard': 'inset 3px 3px 0px 0px rgba(0,0,0,0.1)',
+                    },
+                    backgroundImage: {
+                        'dots': 'radial-gradient(#121212 1px, transparent 1px)',
+                    },
+                    animation: {
+                        'bounce-slight': 'bounce-slight 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                        'radar-spin': 'spin 4s linear infinite',
+                        'fade-in': 'fadeIn 0.3s ease-out forwards',
+                    },
+                    keyframes: {
+                        'bounce-slight': {
+                            '0%, 100%': { transform: 'scale(1)' },
+                            '50%': { transform: 'scale(1.2)' },
+                        },
+                        'fadeIn': {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 全局样式覆盖 */
+        body {
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'Space Grotesk', sans-serif;
+            /* 禁止系统默认菜单和选择 */
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            overscroll-behavior: none;
+        }
+
+        /* 手机外壳容器 */
+        .phone-frame {
+            width: 100%;
+            max-width: 450px;
+            height: 100vh;
+            max-height: 900px;
+            background: #fff;
+            border: 8px solid #121212;
+            border-radius: 40px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 20px 20px 0px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+            /* 适配刘海屏 */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        @media (max-width: 500px) {
+            .phone-frame {
+                max-width: 100vw;
+                height: 100vh;
+                max-height: 100vh;
+                border: none;
+                border-radius: 0;
+                box-shadow: none;
+            }
+        }
+
+        /* 输入框允许选择 */
+        input, code, textarea {
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
+        /* 漫画风格网点背景 */
+        .comic-dots {
+            background-image: radial-gradient(#d1d5db 2px, transparent 2px);
+            background-size: 20px 20px;
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #121212;
+            border-radius: 3px;
+        }
+
+        /* 按钮交互 */
+        .btn-press {
+            transition: all 0.1s;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .btn-press:active {
+            transform: translate(4px, 4px);
+            box-shadow: 0px 0px 0px 0px #121212 !important;
+        }
+
+        /* 底部导航特殊样式 */
+        .nav-item.active {
+            background-color: #121212;
+            color: #FFDE00;
+            transform: translateY(-5px) rotate(-3deg);
+            box-shadow: 4px 4px 0px #FF69B4;
+        }
+        .nav-item.active i {
+            animation: bounce-slight 0.4s ease-in-out;
+        }
+
+        /* 雷达波纹 */
+        .ripple {
+            position: absolute;
+            border: 4px solid #121212;
+            border-radius: 50%;
+            opacity: 0;
+            animation: ripple-anim 3s infinite linear;
+        }
+        .ripple:nth-child(2) { animation-delay: 1s; }
+        .ripple:nth-child(3) { animation-delay: 2s; }
+
+        @keyframes ripple-anim {
+            0% { width: 0; height: 0; opacity: 1; }
+            100% { width: 400px; height: 400px; opacity: 0; }
+        }
+
+        .view-section {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            animation: fade-in 0.3s ease-out;
+        }
+        .view-section.active {
+            display: flex;
+        }
+
+        /* 针对不同页面的背景色切换 */
+        .phone-frame.bg-transfer { background-color: #FFDE00; }
+        .phone-frame.bg-history { background-color: #3B82F6; }
+        .phone-frame.bg-settings { background-color: #8B5CF6; }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* 统一导航栏 */
+        .bottom-nav {
+            position: absolute;
+            bottom: calc(1.5rem + env(safe-area-inset-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 400px;
+            background: white;
+            border: 4px solid #121212;
+            border-radius: 20px;
+            height: 5rem;
+            box-shadow: 4px 4px 0px 0px #121212;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 0.5rem;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="phone-frame bg-transfer">
+        <!-- 隐藏的文件选择器 -->
+        <input type="file" id="file-selector" class="hidden" multiple>
+        
+        <!-- 传输进度浮层 -->
+        <div id="transfer-overlay" class="absolute inset-0 z-[100] bg-black/80 flex items-center justify-center p-6 hidden">
+            <div class="bg-white border-4 border-black p-4 w-full max-w-[340px] shadow-hard rotate-1 flex flex-col max-h-[80vh]">
+                <h3 id="transfer-title" class="font-head text-xl mb-4 uppercase text-center">传输任务</h3>
+                
+                <!-- 文件任务列表 -->
+                <div id="transfer-file-list" class="flex-1 overflow-y-auto space-y-3 mb-4 pr-1 min-h-[100px]">
+                    <!-- 动态生成文件项 -->
+                </div>
+
+                <!-- 总进度 -->
+                <div id="total-progress-container" class="pt-3 border-t-4 border-black">
+                    <div class="flex justify-between items-center mb-1">
+                        <p class="font-body font-bold text-[10px] uppercase opacity-60">总体进度</p>
+                        <p id="file-count-text" class="font-body font-bold text-[10px] uppercase opacity-60">0/0</p>
+                    </div>
+                    <div class="w-full h-4 border-4 border-black bg-gray-200 relative overflow-hidden">
+                        <div id="total-progress-bar" class="absolute inset-y-0 left-0 bg-pop-yellow border-r-4 border-black transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p id="transfer-info" class="font-body font-bold text-[10px] mt-2 text-center opacity-60">0% - 0MB / 0MB</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页面 1: 传输首页 (TRANSFER) -->
+        <section id="view-transfer" class="view-section active comic-dots pt-10">
+            <!-- 标题头 -->
+            <div class="px-6 pt-4 pb-2 z-10">
+                <h1 class="text-5xl font-head text-black leading-[0.9] italic drop-shadow-md">
+                     ZAP<br><span class="text-white text-stroke-2" style="-webkit-text-stroke: 2px black;">DROP</span>
+                </h1>
+                <div class="mt-4 inline-block bg-white border-4 border-black px-3 py-1 -rotate-2 shadow-hard-sm">
+                    <span id="lan-mode-status" class="font-body font-bold text-sm text-pop-green">局域网模式: 开启</span>
+                </div>
+            </div>
+
+            <!-- 雷达主控区 -->
+            <div class="flex-1 relative flex items-center justify-center overflow-hidden">
+                <div id="radar-main-wrapper" class="relative transition-all duration-500 flex items-center justify-center w-full h-full">
+                    <!-- 动态波纹 -->
+                    <div id="radar-ripples" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="ripple"></div>
+                        <div class="ripple"></div>
+                        <div class="ripple"></div>
+                    </div>
+
+                    <!-- 中心按钮 -->
+                    <div id="scan-btn-container" class="relative z-10">
+                        <div id="scan-btn" class="w-48 h-48 bg-white border-[6px] border-black rounded-full flex flex-col items-center justify-center shadow-hard-deep btn-press cursor-pointer group">
+                            <i data-lucide="zap" class="w-16 h-16 fill-black group-hover:scale-110 transition-transform duration-300"></i>
+                            <span id="scan-text" class="font-head text-xl mt-2 tracking-tighter uppercase">扫描</span>
+                            <!-- 装饰性小标签 -->
+                            <div class="absolute -right-4 top-0 bg-pop-pink border-4 border-black px-2 py-1 rotate-12 shadow-hard-sm">
+                                <span id="scan-status" class="font-bold text-xs text-white">准备就绪!</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 主页内联设备列表 (新) -->
+                <div id="homepage-peers-container" class="absolute inset-x-0 bottom-20 px-6 z-20 hidden">
+                    <p class="font-head text-[10px] uppercase mb-3 bg-black text-white inline-block px-2 py-1 -rotate-1">周围可用设备</p>
+                    <div id="homepage-peers-list" class="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                        <!-- 动态生成的设备卡片 -->
+                    </div>
+                </div>
+
+                <!-- 自动发现列表区域 (初始隐藏) -->
+                <div id="id-input-container" class="absolute z-20 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-[340px] hidden">
+                    <div class="bg-white border-4 border-black p-4 shadow-hard -rotate-1 max-h-[60vh] flex flex-col">
+                        <div class="flex justify-between items-center mb-4">
+                            <p class="font-head text-sm uppercase text-red-500">未发现设备</p>
+                            <button id="connect-cancel-btn" class="w-8 h-8 border-2 border-black bg-gray-100 flex items-center justify-center btn-press">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        
+                        <p class="text-[10px] font-body text-gray-500 mb-4 italic">
+                            搜索一分钟未发现可用设备。请检查网络或手动输入 ID 连接。
+                        </p>
+
+                        <div class="pt-3 border-t-2 border-dashed border-black">
+                            <p class="text-[9px] font-body text-gray-400 uppercase mb-2">手动输入 ID:</p>
+                            <div class="flex gap-2">
+                                <input type="text" id="peer-id-input" class="flex-1 border-2 border-black p-1 font-body font-bold text-[10px] focus:outline-none" placeholder="beast-xxxx...">
+                                <button id="connect-confirm-btn" class="bg-pop-green text-white font-head px-3 py-1 border-2 border-black shadow-hard-sm btn-press uppercase text-[10px]">连接</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="h-24"></div>
+        </section>
+
+        <!-- 页面 2: 历史记录 (HISTORY) -->
+        <section id="view-history" class="view-section pt-10">
+            <div class="px-6 pt-4 pb-6 flex justify-between items-end border-b-4 border-black bg-white rounded-b-[40px] shadow-hard z-20">
+                <div>
+                    <h2 class="text-4xl font-head italic">传输日志</h2>
+                    <div class="text-sm font-bold opacity-60 font-body uppercase">今日收获</div>
+                </div>
+            </div>
+
+            <div id="history-list" class="flex-1 overflow-y-auto p-6 space-y-5 comic-dots">
+                <div class="flex items-center gap-4">
+                    <div class="h-1 flex-1 bg-black"></div>
+                    <span class="font-head bg-black text-white px-3 py-1 -rotate-2">现在</span>
+                    <div class="h-1 flex-1 bg-black"></div>
+                </div>
+
+                <!-- 历史卡片将通过 JavaScript 动态生成 -->
+            </div>
+            <div class="h-24"></div>
+        </section>
+
+        <!-- 页面 3: 设置 (SETTINGS) -->
+        <section id="view-settings" class="view-section pt-10">
+            <div class="p-6 pt-4">
+                <h2 class="text-4xl font-head text-white italic drop-shadow-[4px_4px_0_#000]">设置</h2>
+            </div>
+
+            <div class="flex-1 bg-white border-t-[5px] border-black rounded-t-[40px] p-6 space-y-6 overflow-y-auto">
+                <div class="border-4 border-black bg-pop-yellow p-4 shadow-hard flex items-center justify-between rotate-1">
+                    <div class="flex items-center gap-3">
+                        <div class="w-14 h-14 bg-white border-4 border-black rounded-full overflow-hidden">
+                            <img id="my-avatar-img" src="https://picsum.photos/seed/anime1/200" alt="avatar" class="w-full h-full object-cover">
+                        </div>
+                        <div>
+                            <h3 id="my-name-display" class="font-head text-xl uppercase">Otaku_01</h3>
+                            <div class="bg-black text-white text-[10px] px-2 py-0.5 inline-block font-bold uppercase">在线</div>
+                        </div>
+                    </div>
+                    <button id="edit-name-btn" class="w-10 h-10 border-4 border-black bg-white flex items-center justify-center shadow-hard-sm hover:translate-y-1 hover:shadow-none transition-all btn-press">
+                        <i data-lucide="edit-3" class="w-4 h-4 text-black"></i>
+                    </button>
+                </div>
+
+                <!-- 我的 ID 展示 -->
+                <div class="border-4 border-black bg-white p-4 shadow-hard -rotate-1">
+                    <p class="font-head text-xs mb-2 uppercase text-gray-400">我的传输 ID</p>
+                    <div class="flex items-center gap-2">
+                        <code id="my-peer-id" class="flex-1 bg-gray-100 p-2 font-body font-bold text-xs border-2 border-black truncate">正在初始化...</code>
+                        <button id="copy-id-btn" class="w-10 h-10 border-4 border-black bg-pop-yellow flex items-center justify-center shadow-hard-sm btn-press">
+                            <i data-lucide="copy" class="w-4 h-4 text-black"></i>
+                        </button>
+                    </div>
+                    <p class="font-body text-[10px] mt-2 text-gray-500 italic">发送此 ID 给好友即可建立局域网 P2P 连接</p>
+                </div>
+
+                <div class="space-y-4">
+                    <p class="font-head text-sm uppercase text-gray-400">可见性</p>
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-lg font-head">隐身模式</span>
+                        <button id="stealth-mode-toggle" class="toggle-switch w-16 h-8 bg-black rounded-full relative border-2 border-black transition-colors duration-300 group" data-active="false">
+                            <div class="toggle-knob absolute left-1 top-1 w-5 h-5 bg-pop-pink border-2 border-black rounded-full transition-all"></div>
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-lg font-head">自动保存</span>
+                        <button id="auto-save-toggle" class="toggle-switch w-16 h-8 bg-pop-yellow rounded-full relative border-2 border-black" data-active="true">
+                            <div class="toggle-knob absolute right-1 top-1 w-5 h-5 bg-white border-2 border-black rounded-full shadow-sm transition-all"></div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="w-full h-1 bg-gray-200 my-4"></div>
+
+                <button id="storage-path-btn" class="w-full py-4 border-4 border-black bg-white shadow-hard font-head text-lg flex items-center justify-center gap-2 btn-press hover:bg-gray-50">
+                    <i data-lucide="folder-open" class="w-5 h-5"></i>
+                    存储路径
+                </button>
+
+                <div class="text-center mt-6 opacity-50">
+                    <p class="font-head text-xs uppercase">版本 1.0.0 测试版</p>
+                </div>
+            </div>
+            <div class="h-24"></div>
+        </section>
+
+        <!-- 统一导航栏 -->
+        <div class="bottom-nav">
+            <button onclick="switchView('transfer')" class="nav-item active w-14 h-14 rounded-xl flex flex-col items-center justify-center transition-all" data-view="transfer">
+                <i data-lucide="send" class="w-6 h-6 stroke-[3px]"></i>
+            </button>
+            <button onclick="switchView('history')" class="nav-item w-14 h-14 rounded-xl flex flex-col items-center justify-center opacity-50 hover:opacity-100 transition-all" data-view="history">
+                <i data-lucide="clock" class="w-6 h-6 stroke-[3px]"></i>
+            </button>
+            <button onclick="switchView('settings')" class="nav-item w-14 h-14 rounded-xl flex flex-col items-center justify-center opacity-50 hover:opacity-100 transition-all" data-view="settings">
+                <i data-lucide="settings-2" class="w-6 h-6 stroke-[3px]"></i>
+            </button>
+        </div>
+
+        <!-- 自定义波普风格弹窗 (Custom Dialog) -->
+        <div id="custom-dialog" class="absolute inset-0 z-[200] bg-black/60 flex items-center justify-center p-6 hidden">
+            <div class="bg-white border-4 border-black p-6 w-full max-w-[300px] shadow-hard rotate-1 flex flex-col">
+                <h3 id="dialog-title" class="font-head text-lg mb-2 uppercase italic text-pop-pink">提示</h3>
+                <p id="dialog-message" class="font-body font-bold text-xs mb-4">这是一条消息内容</p>
+                
+                <div id="dialog-input-wrapper" class="hidden mb-4">
+                    <input type="text" id="dialog-input" class="w-full border-4 border-black p-2 font-body font-bold text-sm focus:outline-none focus:bg-pop-yellow transition-colors" placeholder="输入内容...">
+                </div>
+
+                <div class="flex gap-3">
+                    <button id="dialog-cancel-btn" class="flex-1 py-2 border-4 border-black bg-gray-200 font-head text-xs shadow-hard-sm btn-press hidden">取消</button>
+                    <button id="dialog-confirm-btn" class="flex-1 py-2 border-4 border-black bg-pop-yellow font-head text-xs shadow-hard-sm btn-press">确定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 视图切换逻辑 ---
+        function switchView(viewId) {
+            // 切换可见性
+            document.querySelectorAll('.view-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById('view-' + viewId).classList.add('active');
+
+            // 切换导航状态
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+                item.style.opacity = '0.5';
+            });
+            const activeNav = document.querySelector(`.nav-item[data-view="${viewId}"]`);
+            activeNav.classList.add('active');
+            activeNav.style.opacity = '1';
+
+            // 切换背景色
+            const app = document.getElementById('app');
+            app.className = 'phone-frame bg-' + viewId;
+        }
+
+        // --- P2P 核心逻辑 ---
+        let peer = null;
+        let activeConn = null;
+        let mqttClient = null;
+        let publicIP = 'unknown';
+        let discoveredPeers = new Map();
+        let ackResolver = null; // 用于同步发送和接收
+        let isStealthMode = false;
+        let isAutoSave = true;
+        let customStoragePath = localStorage.getItem('beast_storage_path') || '';
+        let directoryHandle = null; // 存储选定的文件夹句柄
+        
+        // 生成随机头像种子
+        const avatarSeed = Math.random().toString(36).substr(2, 6);
+        const myAvatarUrl = `https://picsum.photos/seed/${avatarSeed}/200`;
+        
+        // 获取设备名称
+        function getDeviceName() {
+            const ua = navigator.userAgent;
+            if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) return "平板设备";
+            if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated/i.test(ua)) return "移动设备";
+            if (/Macintosh/i.test(ua)) return "Mac 电脑";
+            if (/Windows/i.test(ua)) return "Windows 电脑";
+            if (/Linux/i.test(ua)) return "Linux 电脑";
+            return "未知设备";
+        }
+        let myDeviceName = getDeviceName();
+        let customName = null;
+        
+        const myIdDisplay = document.getElementById('my-peer-id');
+        const fileSelector = document.getElementById('file-selector');
+        const transferOverlay = document.getElementById('transfer-overlay');
+        const transferFileList = document.getElementById('transfer-file-list');
+        const transferInfo = document.getElementById('transfer-info');
+        const transferTitle = document.getElementById('transfer-title');
+        const radarMainWrapper = document.getElementById('radar-main-wrapper');
+        const homepagePeersContainer = document.getElementById('homepage-peers-container');
+        const homepagePeersList = document.getElementById('homepage-peers-list');
+        const totalProgressContainer = document.getElementById('total-progress-container');
+        const totalProgressBar = document.getElementById('total-progress-bar');
+        const fileCountText = document.getElementById('file-count-text');
+
+        // --- 自定义弹窗逻辑 ---
+        function showCustomDialog({ title, message, isPrompt = false, isConfirm = false, defaultValue = '' }) {
+            return new Promise((resolve) => {
+                const dialog = document.getElementById('custom-dialog');
+                const titleEl = document.getElementById('dialog-title');
+                const messageEl = document.getElementById('dialog-message');
+                const inputWrapper = document.getElementById('dialog-input-wrapper');
+                const input = document.getElementById('dialog-input');
+                const cancelBtn = document.getElementById('dialog-cancel-btn');
+                const confirmBtn = document.getElementById('dialog-confirm-btn');
+
+                titleEl.innerText = title || '提示';
+                messageEl.innerText = message || '';
+                
+                if (isPrompt) {
+                    inputWrapper.classList.remove('hidden');
+                    input.value = defaultValue;
+                    cancelBtn.classList.remove('hidden');
+                } else if (isConfirm) {
+                    inputWrapper.classList.add('hidden');
+                    cancelBtn.classList.remove('hidden');
+                } else {
+                    inputWrapper.classList.add('hidden');
+                    cancelBtn.classList.add('hidden');
+                }
+
+                dialog.classList.remove('hidden');
+
+                const cleanup = (value) => {
+                    dialog.classList.add('hidden');
+                    confirmBtn.onclick = null;
+                    cancelBtn.onclick = null;
+                    resolve(value);
+                };
+
+                confirmBtn.onclick = () => cleanup(isPrompt ? input.value : true);
+                cancelBtn.onclick = () => cleanup(false);
+            });
+        }
+
+        // 等待接收端确认
+        function waitForAck() {
+            return new Promise(resolve => {
+                ackResolver = resolve;
+                // 设置超时防止死锁
+                setTimeout(() => {
+                    if (ackResolver === resolve) {
+                        ackResolver = null;
+                        resolve();
+                    }
+                }, 5000);
+            });
+        }
+
+        // 初始化 Peer 和 发现逻辑
+        async function initApp() {
+            // 设置我的随机头像和名称
+            document.getElementById('my-avatar-img').src = myAvatarUrl;
+            document.getElementById('my-name-display').innerText = myDeviceName + ' (' + avatarSeed + ')';
+
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                publicIP = data.ip.replace(/\./g, '_');
+            } catch (e) {
+                console.error('Failed to get IP');
+            }
+            initPeer();
+            initDiscovery();
+        }
+
+        function initPeer() {
+            const randomId = Math.random().toString(36).substr(2, 6);
+            const id = 'beast-' + randomId;
+            peer = new Peer(id, { debug: 1 });
+
+            peer.on('open', (id) => {
+                myIdDisplay.innerText = id;
+                startBroadcasting();
+            });
+
+            peer.on('connection', (conn) => {
+                setupConnection(conn);
+            });
+
+            peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                if (err.type === 'peer-unavailable') {
+                    showCustomDialog({
+                        title: '连接失败',
+                        message: '该用户可能已离线或 ID 错误',
+                    });
+                }
+            });
+        }
+
+        // --- MQTT 自动发现逻辑 ---
+        function initDiscovery() {
+            mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+            mqttClient.on('connect', () => {
+                mqttClient.subscribe(`beast-transfer/discovery/${publicIP}`);
+            });
+
+            mqttClient.on('message', (topic, message) => {
+                // 如果处于隐身模式，完全忽略发现的消息，既不保存也不更新 UI
+                if (isStealthMode) return;
+
+                try {
+                    const data = JSON.parse(message.toString());
+                    if (data.id && data.id !== peer.id) {
+                        discoveredPeers.set(data.id, {
+                            name: data.name || '神秘用户',
+                            lastSeen: Date.now(),
+                            avatar: data.avatar || `https://picsum.photos/seed/${data.id}/200`
+                        });
+                        updateDiscoveryUI();
+                        if (typeof onPeerDiscovered === 'function') onPeerDiscovered();
+                    }
+                } catch (e) {}
+            });
+
+            setInterval(() => {
+                const now = Date.now();
+                let changed = false;
+                for (const [id, info] of discoveredPeers.entries()) {
+                    if (now - info.lastSeen > 15000) {
+                        discoveredPeers.delete(id);
+                        changed = true;
+                    }
+                }
+                if (changed) updateDiscoveryUI();
+            }, 10000);
+        }
+
+        function startBroadcasting() {
+            if (!mqttClient || !peer || !peer.id) return;
+            const broadcast = () => {
+                // 如果开启了隐身模式，不发送广播
+                if (isStealthMode) return;
+                
+                if (mqttClient.connected) {
+                    mqttClient.publish(`beast-transfer/discovery/${publicIP}`, JSON.stringify({
+                        id: peer.id,
+                        name: customName || myDeviceName,
+                        avatar: myAvatarUrl
+                    }));
+                }
+            };
+            broadcast();
+            setInterval(broadcast, 5000);
+        }
+
+        function updateDiscoveryUI() {
+            // 如果发现了设备，直接在主页显示列表容器
+            if (discoveredPeers.size > 0) {
+                homepagePeersContainer.classList.remove('hidden');
+                // 让整个雷达区域（按钮+波纹）显著上移，彻底腾出空间，防止挤压
+                radarMainWrapper.style.transform = 'translateY(-120px) scale(0.75)';
+                
+                // 清除一分钟后的弹窗计时
+                if (scanTimer) {
+                    clearTimeout(scanTimer);
+                    scanTimer = null;
+                }
+            } else {
+                homepagePeersContainer.classList.add('hidden');
+                radarMainWrapper.style.transform = '';
+            }
+
+            homepagePeersList.innerHTML = '';
+            discoveredPeers.forEach((info, id) => {
+                const isConnected = activeConn && activeConn.peer === id;
+                const item = document.createElement('div');
+                item.className = `flex-shrink-0 bg-white border-4 border-black p-3 shadow-hard rotate-1 hover:rotate-0 transition-all cursor-pointer group btn-press w-32 ${isConnected ? 'bg-pop-yellow' : ''}`;
+                item.onclick = () => {
+                    if (isConnected) {
+                        fileSelector.click();
+                    } else {
+                        const conn = peer.connect(id);
+                        setupConnection(conn);
+                    }
+                };
+                item.innerHTML = `
+                    <div class="relative mb-2">
+                        <div class="w-12 h-12 border-2 border-black rounded-full overflow-hidden mx-auto">
+                            <img src="${info.avatar}" class="w-full h-full object-cover">
+                        </div>
+                        <div class="absolute -right-1 -top-1 w-4 h-4 ${isConnected ? 'bg-pop-blue' : 'bg-pop-green'} border-2 border-black rounded-full ${isConnected ? '' : 'animate-pulse'}"></div>
+                    </div>
+                    <p class="font-head text-[10px] text-center truncate uppercase mb-1">${isConnected ? '已连接' : info.name}</p>
+                    <p class="font-body text-[8px] text-center text-gray-400 uppercase">${isConnected ? '点击上传' : '附近设备'}</p>
+                `;
+                homepagePeersList.appendChild(item);
+            });
+            lucide.createIcons();
+        }
+
+        function setupConnection(conn) {
+            activeConn = conn;
+            conn.on('open', () => {
+                // 连接成功后，更新主页列表中的状态
+                updateDiscoveryUI();
+            });
+
+            let receivedChunks = [];
+            let metadata = null;
+            let receivedBatchSize = 0;
+
+            conn.on('data', (data) => {
+                if (data.type === 'metadata') {
+                    metadata = data;
+                    receivedChunks = [];
+                    
+                    if (metadata.fileIndex === 1) {
+                        transferFileList.innerHTML = '';
+                        receivedBatchSize = 0;
+                        transferOverlay.classList.remove('hidden');
+                        transferTitle.innerText = '正在接收...';
+                    }
+                    
+                    createFileTransferItem(metadata.name, metadata.size, metadata.fileIndex);
+                    fileCountText.innerText = `${metadata.fileIndex}/${metadata.totalFiles}`;
+                    
+                } else if (data.type === 'chunk') {
+                    receivedChunks.push(data.content);
+                    const currentFileProgress = Math.round((receivedChunks.length / data.totalChunks) * 100);
+                    
+                    let totalBatchProgress = null;
+                    if (metadata.totalBatchSize) {
+                        const currentReceivedSize = receivedBatchSize + (receivedChunks.length * CHUNK_SIZE);
+                        totalBatchProgress = Math.round((currentReceivedSize / metadata.totalBatchSize) * 100);
+                    }
+
+                    updateTransferProgress(currentFileProgress, receivedChunks.length, data.totalChunks, metadata.size, totalBatchProgress, metadata.fileIndex);
+                    
+                    // 每 200 个分块发送一次确认，减少往返开销，大幅提升速度
+                    if (receivedChunks.length % 200 === 0) {
+                        conn.send({ type: 'ack_chunk', count: receivedChunks.length });
+                    }
+
+                    if (receivedChunks.length === data.totalChunks) {
+                        const blob = new Blob(receivedChunks);
+                        
+                        if (isAutoSave) {
+                            downloadFile(blob, metadata.name);
+                        }
+                        
+                        addHistoryItem(metadata.name, '接收自: ' + conn.peer, metadata.size, true, blob);
+                        receivedBatchSize += metadata.size;
+                        
+                        // 标记当前文件完成
+                        const item = document.getElementById(`file-item-${metadata.fileIndex}`);
+                        if (item) item.classList.add('opacity-50');
+                        
+                        // 发送最终 ACK
+                        conn.send({ type: 'ack_final' });
+                        
+                        if (metadata.fileIndex === metadata.totalFiles) {
+                            setTimeout(hideTransferOverlay, 1000);
+                        }
+                    }
+                } else if (data.type === 'ack_chunk' || data.type === 'ack_final') {
+                    if (ackResolver) {
+                        ackResolver();
+                        ackResolver = null;
+                    }
+                }
+            });
+
+            conn.on('close', () => { activeConn = null; });
+        }
+
+        // --- 文件传输功能优化 ---
+        const CHUNK_SIZE = 163840; // 提升到 160KB，平衡兼容性与极限速度
+        const MAX_BUFFERED_AMOUNT = 4194304; // 提升到 4MB 缓冲阈值，适应高带宽
+
+        async function sendFiles(files) {
+            if (!activeConn) return;
+            
+            const fileList = Array.from(files);
+            const totalFiles = fileList.length;
+            const totalBatchSize = fileList.reduce((acc, f) => acc + f.size, 0);
+            let sentBatchSize = 0;
+
+            transferFileList.innerHTML = '';
+            transferOverlay.classList.remove('hidden');
+            transferTitle.innerText = '正在发送...';
+            fileCountText.innerText = `0/${totalFiles}`;
+
+            // 初始化所有文件项
+            fileList.forEach((file, index) => {
+                createFileTransferItem(file.name, file.size, index + 1);
+            });
+
+            for (let i = 0; i < totalFiles; i++) {
+                const file = fileList[i];
+                const fileIndex = i + 1;
+                const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+                
+                activeConn.send({
+                    type: 'metadata',
+                    name: file.name,
+                    size: file.size,
+                    totalChunks: totalChunks,
+                    fileIndex: fileIndex,
+                    totalFiles: totalFiles,
+                    totalBatchSize: totalBatchSize
+                });
+
+                fileCountText.innerText = `${fileIndex}/${totalFiles}`;
+
+                for (let j = 0; j < totalChunks; j++) {
+                    // 背压控制
+                    if (activeConn.dataChannel && activeConn.dataChannel.bufferedAmount > MAX_BUFFERED_AMOUNT) {
+                        await new Promise(resolve => {
+                            const checkBuffer = setInterval(() => {
+                                if (activeConn.dataChannel.bufferedAmount < MAX_BUFFERED_AMOUNT / 2) {
+                                    clearInterval(checkBuffer);
+                                    resolve();
+                                }
+                            }, 50);
+                        });
+                    }
+
+                    const start = j * CHUNK_SIZE;
+                    const end = Math.min(file.size, start + CHUNK_SIZE);
+                    const chunk = file.slice(start, end);
+                    const arrayBuffer = await chunk.arrayBuffer();
+                    
+                    activeConn.send({
+                        type: 'chunk',
+                        content: arrayBuffer,
+                        currentChunk: j + 1,
+                        totalChunks: totalChunks
+                    });
+
+                    // 每 200 个块强制同步一次，兼顾速度与稳定性
+                    if ((j + 1) % 200 === 0) {
+                        await waitForAck();
+                    }
+
+                    const currentFileProgress = Math.round(((j + 1) / totalChunks) * 100);
+                    const currentSentSize = sentBatchSize + end;
+                    const totalBatchProgress = Math.round((currentSentSize / totalBatchSize) * 100);
+                    
+                    updateTransferProgress(currentFileProgress, j + 1, totalChunks, file.size, totalBatchProgress, fileIndex);
+                }
+
+                await waitForAck();
+                sentBatchSize += file.size;
+                
+                // 标记完成
+                const item = document.getElementById(`file-item-${fileIndex}`);
+                if (item) item.classList.add('opacity-50');
+                
+                addHistoryItem(file.name, '发送至: ' + activeConn.peer, file.size, true);
+            }
+
+            setTimeout(hideTransferOverlay, 1000);
+        }
+
+        function createFileTransferItem(name, size, index) {
+            const sizeStr = (size / (1024 * 1024)).toFixed(2) + 'MB';
+            const item = document.createElement('div');
+            item.id = `file-item-${index}`;
+            item.className = "bg-gray-50 border-2 border-black p-2 shadow-hard-sm transition-opacity";
+            item.innerHTML = `
+                <div class="flex justify-between items-center mb-1">
+                    <p class="font-head text-[10px] truncate w-2/3 uppercase">${name}</p>
+                    <p class="font-body font-bold text-[8px] opacity-60">${sizeStr}</p>
+                </div>
+                <div class="w-full h-2 border-2 border-black bg-white relative overflow-hidden">
+                    <div id="file-progress-${index}" class="absolute inset-y-0 left-0 bg-pop-pink transition-all duration-300" style="width: 0%"></div>
+                </div>
+            `;
+            transferFileList.appendChild(item);
+            // 自动滚动到底部
+            transferFileList.scrollTop = transferFileList.scrollHeight;
+        }
+
+        async function downloadFile(blob, filename) {
+            // 优先尝试保存到用户选定的文件夹
+            if (directoryHandle) {
+                try {
+                    const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    console.log(`文件 ${filename} 已直接保存到选定目录`);
+                    return;
+                } catch (err) {
+                    console.error('保存到目录失败，将退回到普通下载', err);
+                }
+            }
+
+            // 退回到普通下载
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            
+            // 如果设置了自定义路径前缀 (移动端退而求其次的方案)
+            const finalFilename = customStoragePath 
+                ? `${customStoragePath}_${filename}` 
+                : filename;
+                
+            a.download = finalFilename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // --- UI 辅助函数 ---
+        function showTransferOverlay(title, progress) {
+            transferOverlay.classList.remove('hidden');
+            transferTitle.innerText = title;
+        }
+
+        function updateTransferProgress(progress, current, total, totalSize, totalBatchProgress, fileIndex) {
+            // 更新单个文件进度
+            const fileBar = document.getElementById(`file-progress-${fileIndex}`);
+            if (fileBar) fileBar.style.width = progress + '%';
+
+            // 更新总进度
+            if (totalBatchProgress !== null) {
+                totalProgressBar.style.width = totalBatchProgress + '%';
+                const totalProgressText = totalBatchProgress + '%';
+                const sizeInMB = (totalSize / (1024 * 1024)).toFixed(2);
+                transferInfo.innerText = `${totalProgressText} - 当前文件: ${progress}% (${sizeInMB} MB)`;
+            }
+        }
+
+        function hideTransferOverlay() {
+            transferOverlay.classList.add('hidden');
+        }
+
+        function addHistoryItem(name, desc, size, success, blob = null) {
+            const logsContainer = document.getElementById('history-list');
+            const sizeStr = (size / (1024 * 1024)).toFixed(2) + 'MB';
+            
+            const item = document.createElement('div');
+            item.className = `bg-white border-4 border-black p-0 shadow-hard hover:translate-x-1 transition-transform relative overflow-hidden group cursor-pointer`;
+            
+            // 如果有 blob 且没有自动保存，允许点击下载
+            if (blob && !isAutoSave) {
+                item.onclick = () => downloadFile(blob, name);
+                desc += ' (点击手动下载)';
+            }
+
+            item.innerHTML = `
+                <div class="absolute top-0 bottom-0 left-0 w-3 ${success ? 'bg-pop-green' : 'bg-red-500'} group-hover:w-full transition-all duration-300 ease-out z-0"></div>
+                <div class="relative z-10 flex p-4 gap-4 items-center group-hover:text-white transition-colors">
+                    <div class="w-12 h-12 bg-black border-2 border-black flex-shrink-0 flex items-center justify-center">
+                        <span class="text-2xl">${name.match(/\.(jpg|jpeg|png|gif)$/i) ? '📸' : '📄'}</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-head text-lg truncate leading-none">${name}</h3>
+                        <p class="font-body text-xs font-bold mt-1 opacity-70 uppercase">${desc}</p>
+                    </div>
+                    <div class="font-head text-sm">${sizeStr}</div>
+                </div>
+            `;
+            logsContainer.insertBefore(item, logsContainer.children[1]);
+        }
+
+        // --- 事件监听 ---
+        const scanBtn = document.getElementById('scan-btn');
+        const idInputContainer = document.getElementById('id-input-container');
+        const peerIdInput = document.getElementById('peer-id-input');
+        const scanBtnContainer = document.getElementById('scan-btn-container');
+        let scanTimer = null;
+
+        // 扫描按钮点击
+        scanBtn.addEventListener('click', () => {
+            // 如果开启了隐身模式，禁止主动扫描
+            if (isStealthMode) {
+                showCustomDialog({
+                    title: '模式冲突',
+                    message: '您当前处于“隐身模式”，无法主动扫描他人。请先在设置中关闭隐身模式。'
+                });
+                return;
+            }
+
+            const ripples = document.querySelectorAll('.ripple');
+            ripples.forEach(r => r.style.animationDuration = '1s');
+            document.getElementById('scan-text').innerText = '搜索中...';
+            
+            // 如果已经在计时，先清除
+            if (scanTimer) clearTimeout(scanTimer);
+
+            // 一分钟（60000ms）后检查
+            scanTimer = setTimeout(() => {
+                // 如果一分钟后依然没有发现任何设备，或者列表为空
+                if (discoveredPeers.size === 0) {
+                    scanBtnContainer.classList.add('opacity-20', 'pointer-events-none');
+                    idInputContainer.classList.remove('hidden');
+                    updateDiscoveryUI();
+                    document.getElementById('scan-text').innerText = '扫描';
+                    const ripples = document.querySelectorAll('.ripple');
+                    ripples.forEach(r => r.style.animationDuration = '3s');
+                }
+            }, 60000); 
+
+            // 注意：这里不再立即弹出 idInputContainer.classList.remove('hidden')
+        });
+
+        // 监听设备发现，如果发现了设备，可以考虑自动停止计时或更新 UI
+        function onPeerDiscovered() {
+            // 如果发现了设备，且计时器还在跑，可以考虑在这里做一些视觉反馈
+            // 但根据需求，只要发现了设备，就不应该在一分钟后弹出输入框
+            if (scanTimer && discoveredPeers.size > 0) {
+                // 暂时不清除计时器，因为用户可能想继续搜索，但由于列表不为空，计时器触发时也不会弹窗
+            }
+        }
+
+        // 连接确认
+        document.getElementById('connect-confirm-btn').addEventListener('click', () => {
+            const targetId = peerIdInput.value.trim();
+            if (targetId && peer) {
+                const conn = peer.connect(targetId);
+                setupConnection(conn);
+                idInputContainer.classList.add('hidden');
+                scanBtnContainer.classList.remove('opacity-20', 'pointer-events-none');
+                document.getElementById('scan-text').innerText = '扫描';
+                const ripples = document.querySelectorAll('.ripple');
+                ripples.forEach(r => r.style.animationDuration = '3s');
+            }
+        });
+
+        // 取消连接
+        document.getElementById('connect-cancel-btn').addEventListener('click', () => {
+            idInputContainer.classList.add('hidden');
+            radarMainWrapper.style.transform = '';
+            document.getElementById('scan-text').innerText = '扫描';
+            const ripples = document.querySelectorAll('.ripple');
+            ripples.forEach(r => r.style.animationDuration = '3s');
+        });
+
+        // 文件选择后发送
+        fileSelector.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0 && activeConn) {
+                sendFiles(files);
+            }
+        });
+
+        // 复制 ID
+        document.getElementById('copy-id-btn').addEventListener('click', () => {
+            const id = myIdDisplay.innerText;
+            navigator.clipboard.writeText(id).then(() => {
+                showCustomDialog({
+                    title: '成功',
+                    message: 'ID 已复制到剪贴板!'
+                });
+            });
+        });
+
+        // 编辑名称
+        document.getElementById('edit-name-btn').addEventListener('click', async () => {
+            const newName = await showCustomDialog({
+                title: '修改名称',
+                message: '请输入新的设备名称:',
+                isPrompt: true,
+                defaultValue: customName || myDeviceName
+            });
+            
+            if (newName && newName.trim() !== '') {
+                customName = newName.trim();
+                document.getElementById('my-name-display').innerText = customName + ' (' + avatarSeed + ')';
+                // 立即广播一次新名称
+                if (mqttClient && mqttClient.connected) {
+                    mqttClient.publish(`beast-transfer/discovery/${publicIP}`, JSON.stringify({
+                        id: peer.id,
+                        name: customName,
+                        avatar: myAvatarUrl
+                    }));
+                }
+            }
+        });
+
+        // 启动初始化
+        initApp();
+        lucide.createIcons();
+
+        // 按钮点击通用反馈
+        document.querySelectorAll('.btn-press, .nav-item').forEach(el => {
+            el.addEventListener('mousedown', function() {
+                this.style.transform = 'scale(0.95) ' + (this.classList.contains('nav-item') && this.classList.contains('active') ? 'translateY(-5px) rotate(-3deg)' : '');
+            });
+            el.addEventListener('mouseup', function() { this.style.transform = ''; });
+            el.addEventListener('mouseleave', function() { this.style.transform = ''; });
+        });
+
+        // Toggle Switch 逻辑
+        document.querySelectorAll('.toggle-switch').forEach(toggle => {
+            toggle.addEventListener('click', function() {
+                const isActive = this.getAttribute('data-active') === 'true';
+                const newActive = !isActive;
+                this.setAttribute('data-active', newActive);
+                const knob = this.querySelector('.toggle-knob');
+                
+                // 更新内部状态
+                if (this.id === 'stealth-mode-toggle') {
+                    isStealthMode = newActive;
+                    const statusEl = document.getElementById('lan-mode-status');
+                    
+                    if (isStealthMode) {
+                        // 开启隐身时
+                        if (statusEl) {
+                            statusEl.innerText = '局域网模式: 隐身';
+                            statusEl.classList.replace('text-pop-green', 'text-red-500');
+                        }
+                        
+                        // 清除已发现列表并重置 UI
+                        discoveredPeers.clear();
+                        updateDiscoveryUI();
+                        
+                        const ripples = document.querySelectorAll('.ripple');
+                        ripples.forEach(r => r.style.animationDuration = '3s');
+                        document.getElementById('scan-text').innerText = '扫描';
+                        if (scanTimer) {
+                            clearTimeout(scanTimer);
+                            scanTimer = null;
+                        }
+                        homepagePeersContainer.classList.add('hidden');
+                        radarMainWrapper.style.transform = '';
+                    } else {
+                        // 关闭隐身时
+                        if (statusEl) {
+                            statusEl.innerText = '局域网模式: 开启';
+                            statusEl.classList.replace('text-red-500', 'text-pop-green');
+                        }
+                    }
+                } else if (this.id === 'auto-save-toggle') {
+                    isAutoSave = newActive;
+                }
+
+                if (newActive) {
+                    this.classList.replace('bg-black', 'bg-pop-yellow');
+                    knob.classList.replace('left-1', 'right-1');
+                    knob.classList.replace('bg-pop-pink', 'bg-white');
+                } else {
+                    this.classList.replace('bg-pop-yellow', 'bg-black');
+                    knob.classList.replace('right-1', 'left-1');
+                    knob.classList.replace('bg-white', 'bg-pop-pink');
+                }
+            });
+        });
+
+        // 存储路径点击
+        document.getElementById('storage-path-btn').addEventListener('click', async () => {
+            if ('showDirectoryPicker' in window) {
+                // 如果浏览器支持文件夹选择 API (通常是桌面端 Chrome/Edge)
+                try {
+                    directoryHandle = await window.showDirectoryPicker();
+                    // 检查并请求读写权限
+                    const options = { mode: 'readwrite' };
+                    if ((await directoryHandle.queryPermission(options)) !== 'granted') {
+                        if ((await directoryHandle.requestPermission(options)) !== 'granted') {
+                            directoryHandle = null;
+                            showCustomDialog({ title: '失败', message: '未获得文件夹读写权限。' });
+                            return;
+                        }
+                    }
+                    showCustomDialog({ 
+                        title: '设置成功', 
+                        message: `已成功绑定文件夹。接收的文件将直接保存到该位置！` 
+                    });
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error(err);
+                        showCustomDialog({ title: '错误', message: '无法选择文件夹，请重试。' });
+                    }
+                }
+            } else {
+                // 如果浏览器不支持 (如手机端 Safari/Chrome)
+                const ua = navigator.userAgent;
+                let mobileMsg = '';
+                if (/iPhone|iPad|iPod/i.test(ua)) {
+                    mobileMsg = 'iOS 系统出于安全考虑，不允许网页直接控制文件夹。文件将自动保存到“文件”App 的“下载”目录中。';
+                } else if (/Android/i.test(ua)) {
+                    mobileMsg = 'Android 系统暂不支持网页直接选择存储目录。文件将自动保存到您的“系统下载 (Download)”文件夹中。';
+                } else {
+                    mobileMsg = '您的浏览器不支持直接选择文件夹。文件将保存到默认下载位置。';
+                }
+                
+                showCustomDialog({ title: '系统限制', message: mobileMsg });
+            }
+        });
+    </script>
+</body>
 </html>
